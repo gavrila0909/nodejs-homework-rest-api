@@ -1,7 +1,7 @@
 const fs = require("fs");
 const path = require("path");
 
-const dataFile = path.join(__dirname, "../models/contacts.json");
+const dataFile = path.join(__dirname, "../services/contacts.json");
 
 const readData = () => {
   return new Promise((resolve, reject) => {
