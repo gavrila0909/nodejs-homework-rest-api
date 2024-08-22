@@ -1,8 +1,13 @@
 const express = require("express");
 const logger = require("morgan");
 const cors = require("cors");
+const passport = require("passport");
+require("dotenv").config();
 
 const app = express();
+
+const contactsRouter = require("./routes/api/contacts");
+const authRouter = require("./routes/api/auth");
 
 const formatsLogger = app.get("env") === "development" ? "dev" : "short";
 
@@ -10,20 +15,28 @@ const formatsLogger = app.get("env") === "development" ? "dev" : "short";
 app.use(logger(formatsLogger));
 app.use(cors());
 app.use(express.json());
+app.use(passport.initialize());
+require("./config/passport")(passport);
 
-// Importă router-ul pentru contacte
-const contactsRouter = require("./routes/api/contacts");
-const { default: mongoose } = require("mongoose");
-app.use("/api/contacts", contactsRouter);
+app.use(
+  "/contacts",
+  passport.authenticate("jwt", { session: false }),
+  contactsRouter
+);
 
-// Middleware pentru rute neidentificate (404 Not Found)
+app.use("/contacts", contactsRouter);
+app.use("/", authRouter);
+
+
+
 app.use((req, res) => {
-  res.status(404).json({ message: "Not found" });
+  res.status(404).json({ message: "Not found this page" });
 });
 
-// Middleware pentru gestionarea erorilor
 app.use((err, req, res, next) => {
   res.status(500).json({ message: err.message });
 });
+
+
 
 module.exports = app;
