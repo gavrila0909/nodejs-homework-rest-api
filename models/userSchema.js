@@ -1,25 +1,44 @@
 const mongoose = require("mongoose");
 const bcrypt = require("bcryptjs");
+const gravatar = require("gravatar");
+const jwt = require('jsonwebtoken');
+
 
 const userSchema = new mongoose.Schema({
   email: {
     type: String,
-    required: [true, 'Email is required'],
+    required: [true, "Email is required"],
     unique: true,
   },
   password: {
     type: String,
-    required: [true, 'Password is required'],
+    required: [true, "Password is required"],
   },
   subscription: {
     type: String,
-    enum: ['starter', 'pro', 'business'],
-    default: 'starter',
+    enum: ["starter", "pro", "business"],
+    default: "starter",
   },
   token: {
     type: String,
     default: null,
   },
+  avatarURL: {
+    type: String,
+    default: '',
+  },
+});
+
+userSchema.pre('save', function (next) {
+  if (this.isNew || this.isModified('email')) {
+    const avatarURL = gravatar.url(this.email, {
+      s: '200', 
+      r: 'pg', 
+      d: 'mm'  
+    });
+    this.avatarURL = avatarURL;
+  }
+  next();
 });
 
 // criptarea parolei
@@ -27,10 +46,15 @@ userSchema.methods.setPassword = async function (password) {
   this.password = await bcrypt.hash(password, 10);
 };
 
-userSchema.methods.isValidPassword = async function (password) {
+userSchema.methods.matchPassword = async function (password) {
   return await bcrypt.compare(password, this.password);
 };
 
-const User = mongoose.model('user', userSchema);
+userSchema.methods.generateAuthToken = function () {
+  const payload = { id: this._id };
+  return jwt.sign(payload, process.env.JWT_SECRET, { expiresIn: '1h' });
+};
+
+const User = mongoose.model("User", userSchema);
 
 module.exports = User;
