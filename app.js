@@ -2,6 +2,7 @@ const express = require("express");
 const logger = require("morgan");
 const cors = require("cors");
 const passport = require("passport");
+const path = require('path');
 require("dotenv").config();
 
 const app = express();
@@ -18,13 +19,11 @@ app.use(express.json());
 app.use(passport.initialize());
 require("./config/passport")(passport);
 
-app.use(
-  "/contacts",
-  passport.authenticate("jwt", { session: false }),
-  contactsRouter
-);
+app.use(express.static("public"));
+app.use('/avatars', express.static(path.join(__dirname, 'public/avatars')));
 
-app.use("/contacts", contactsRouter);
+
+app.use("/contacts", passport.authenticate("jwt", { session: false }),contactsRouter);
 app.use("/", authRouter);
 
 
@@ -34,7 +33,7 @@ app.use((req, res) => {
 });
 
 app.use((err, req, res, next) => {
-  res.status(500).json({ message: err.message });
+  res.status(500).json({ message: "Internal Server Error"});
 });
 
 
