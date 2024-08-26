@@ -5,6 +5,8 @@ const Joi = require("joi");
 const path = require("path");
 const fs = require("fs");
 const jimp = require("jimp");
+const { v4: uuidv4 } = require("uuid");
+const transporter = require("../../config/nodemailer");
 
 require("dotenv").config();
 
@@ -22,6 +24,7 @@ router.post("/signup", async (req, res) => {
     const existingUser = await User.findOne({ email });
 
     if (existingUser) {
+      console.log("User already exists");
       return res.status(409).json({
         status: "error",
         code: 409,
@@ -30,23 +33,123 @@ router.post("/signup", async (req, res) => {
       });
     }
 
+    const verificationToken = uuidv4();
+
     const newUser = new User({
       email,
       subscription: "starter",
+      verificationToken,
     });
 
     await newUser.setPassword(password);
-
     await newUser.save();
 
-    res.status(201).json({
-      user: {
-        email: newUser.email,
-        subscription: newUser.subscription,
-        avatarURL: newUser.avatarURL,
-      },
-    });
+    const verifyUrl = `${process.env.BASE_URL}/verify/${verificationToken}`;
+
+    const mailOptions = {
+      from: process.env.EMAIL_USER,
+      to: email,
+      subject: "Account Registration Confirmation",
+      text: "Welcome! Please verify your email address",
+      html: `<p>Welcome!</p><p> Click <a href="${verifyUrl}">here</a> to verify your email address.</p>`,
+    };
+
+    try {
+      const mailResponse = await transporter.sendMail(mailOptions);
+      console.log("Email sent:", mailResponse);
+
+      return res.status(201).json({
+        message: "Signup successful, verification email sent",
+        user: {
+          email: newUser.email,
+          subscription: newUser.subscription,
+          avatarURL: newUser.avatarURL,
+          verify: newUser.verify,
+        },
+      });
+    } catch (emailError) {
+      console.error("Error sending email:", emailError);
+      return res.status(500).json({
+        message: "Internal Server Error: Unable to send verification email",
+      });
+    }
+  } catch (dbError) {
+    console.error("Registration error:", dbError);
+    return res.status(500).json({ message: "Internal Server Error" });
+  }
+});
+
+router.get("/verify/:verificationToken", async (req, res) => {
+  const { verificationToken } = req.params;
+
+  try {
+    const user = await User.findOne({ verificationToken });
+
+    if (!user) {
+      return res.status(404).json({ message: "User not found" });
+    }
+
+    if (user.verify) {
+      return res.status(400).json({ message: "User already verified" });
+    }
+
+    user.verify = true;
+    delete user.verificationToken;
+    await user.save();
+
+    res.status(200).json({ message: "Verification successful" });
   } catch (error) {
+    console.error("Error during verification:", error);
+    res.status(500).json({ message: "Internal Server Error" });
+  }
+});
+
+router.post("/verify", async (req, res) => {
+  const { email } = req.body;
+
+  if (!email) {
+    return res.status(400).json({ message: "Missing required field email" });
+  }
+
+  try {
+    const user = await User.findOne({ email });
+
+    if (!user) {
+      return res.status(404).json({ message: "User not found" });
+    }
+
+    if (user.verify) {
+      return res
+        .status(400)
+        .json({ message: "Verification has already been passed" });
+    }
+
+    const verificationToken = uuidv4();
+    user.verificationToken = verificationToken;
+    await user.save();
+
+    const verifyUrl = `${process.env.BASE_URL}/verify/${verificationToken}`;
+
+    const mailOptions = {
+      from: process.env.EMAIL_USER,
+      to: email,
+      subject: "Email Verification",
+      text: `Welcome! Please confirm your email address to activate your account. ${verifyUrl}`,
+      html: `<p>Welcome!</p>
+             <p>It looks like you requested another verification email. Click <a href="${verifyUrl}">here</a> to verify your email address.</p>`,
+    };
+
+    try {
+      const mailResponse = await transporter.sendMail(mailOptions);
+      console.log(mailResponse);
+
+      res.status(200).json({ message: "Verification email sent" });
+    } catch (error) {
+      console.error("Error during sending verification email:", error);
+      res.status(500).json({ message: "Internal Server Error" });
+    }
+  } catch (error) {
+    console.error("Error during verification process:", error);
     res.status(500).json({ message: "Internal Server Error" });
   }
 });
@@ -63,7 +166,13 @@ router.post("/login", async (req, res) => {
       });
     }
 
-    const token = user.generateAuthToken(); 
+    if (!user.verify) {
+      return res.status(403).json({
+        message: "Email not verified",
+      });
+    }
+
+    const token = user.generateAuthToken();
 
     user.token = token;
     await user.save();
@@ -81,8 +190,6 @@ router.post("/login", async (req, res) => {
     res.status(500).json({ message: "Internal Server Error" });
   }
 });
-
-
 
 router.get("/logout", authMiddleware, async (req, res) => {
   try {

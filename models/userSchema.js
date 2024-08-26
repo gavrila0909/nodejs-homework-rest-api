@@ -27,6 +27,14 @@ const userSchema = new mongoose.Schema({
     type: String,
     default: '',
   },
+  verify: {
+    type: Boolean,
+    default: false,
+  },
+  verificationToken: {
+    type: String,
+    required: [true, 'Verify token is required'],
+  },
 });
 
 userSchema.pre('save', function (next) {
@@ -54,6 +62,10 @@ userSchema.methods.generateAuthToken = function () {
   const payload = { id: this._id };
   return jwt.sign(payload, process.env.JWT_SECRET, { expiresIn: '1h' });
 };
+
+// userSchema.methods.generateVerificationToken = function() {
+//   return crypto.randomBytes(16).toString("hex");
+// };
 
 const User = mongoose.model("User", userSchema);
 
