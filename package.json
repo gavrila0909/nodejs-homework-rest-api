@@ -24,8 +24,10 @@
     "monitor": "^0.6.10",
     "morgan": "1.10.0",
     "multer": "^1.4.5-lts.1",
+    "nodemailer": "^6.9.14",
     "passport": "^0.7.0",
-    "passport-jwt": "^4.0.1"
+    "passport-jwt": "^4.0.1",
+    "uuid": "^10.0.0"
   },
   "devDependencies": {
     "eslint": "7.19.0",
